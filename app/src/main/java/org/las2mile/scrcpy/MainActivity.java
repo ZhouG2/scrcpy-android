@@ -32,6 +32,8 @@ import android.widget.Spinner;
 import android.widget.Switch;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.Inet4Address;
@@ -101,6 +103,28 @@ public class MainActivity extends Activity implements Scrcpy.ServiceCallbacks, S
                 byte[] buffer = new byte[inputStream.available()];
                 inputStream.read(buffer);
                 fileBase64 = Base64.encode(buffer, 2);
+                File f = getFileStreamPath("priv.key");
+                if(!f.exists()){
+                    InputStream pri = assetManager.open("priv.key");
+                    InputStream pub = assetManager.open("pub.key");
+                    buffer = new byte[pri.available()];
+                    pri.read(buffer);
+                    pri.close();
+                    FileOutputStream privOut = openFileOutput("priv.key", Context.MODE_PRIVATE);
+                    privOut.write(buffer);
+                    privOut.close();
+
+                    buffer = new byte[pub.available()];
+                    pub.read(buffer);
+                    pub.close();
+
+                    FileOutputStream pubOut = openFileOutput("pub.key", Context.MODE_PRIVATE);
+                    pubOut.write(buffer);
+                    pubOut.close();
+                }
+
+
+
             } catch (IOException e) {
                 Log.e("Asset Manager", e.getMessage());
             }

@@ -1,6 +1,8 @@
 package org.las2mile.scrcpy.adblib;
 
 
+import android.util.Log;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
@@ -122,8 +124,11 @@ public class AdbConnection implements Closeable {
                         AdbProtocol.AdbMessage msg = AdbProtocol.AdbMessage.parseAdbMessage(inputStream);
 
                         /* Verify magic and checksum */
-                        if (!AdbProtocol.validateMessage(msg))
+                        if (!AdbProtocol.validateMessage(msg)){
+                            Log.d("connectionThread", "run: invalidateMessage");
                             continue;
+                        }
+
 
                         switch (msg.command) {
                             /* Stream-oriented commands */
@@ -205,6 +210,8 @@ public class AdbConnection implements Closeable {
                     } catch (Exception e) {
                         /* The cleanup is taken care of by a combination of this thread
                          * and close() */
+//                        Log.e("connectionThread", "run: ", );
+                        e.printStackTrace();
                         break;
                     }
                 }
@@ -244,7 +251,7 @@ public class AdbConnection implements Closeable {
 
         return maxData;
     }
-
+    public static  String TAG = "AdbConnection";
     /**
      * Connects to the remote device. This routine will block until the connection
      * completes.
@@ -266,12 +273,17 @@ public class AdbConnection implements Closeable {
 
         /* Wait for the connection to go live */
         synchronized (this) {
+            Log.i(TAG, "wait connected ");
             if (!connected)
                 wait();
 
             if (!connected) {
+
                 throw new IOException("Connection failed");
             }
+            else
+                Log.i(TAG, "connect: sucessed!!");
+
         }
     }
 
@@ -359,6 +371,7 @@ public class AdbConnection implements Closeable {
         try {
             connectionThread.join();
         } catch (InterruptedException e) {
+
         }
     }
 }

@@ -11,6 +11,7 @@
     <string name="back_button">v</string>
 
     <string name="switch1">Nav Bar  (check this if target device does not have on-screen nav bar)</string>
+    <string name="host">m.ziot.fun:27255</string>
 
 
     <string-array name="options_resolution_keys">

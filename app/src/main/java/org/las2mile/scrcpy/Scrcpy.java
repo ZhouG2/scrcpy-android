@@ -4,6 +4,7 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.IBinder;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
 
@@ -56,7 +57,8 @@ public class Scrcpy extends Service {
     public void start(Surface surface, String serverAdr, int screenHeight, int screenWidth) {
         this.videoDecoder = new VideoDecoder();
         videoDecoder.start();
-        this.serverAdr = serverAdr;
+
+        this.serverAdr = serverAdr.split(":")[0];
         this.screenHeight = screenHeight;
         this.screenWidth = screenWidth;
         this.surface = surface;
@@ -113,7 +115,7 @@ public class Scrcpy extends Service {
         }
         event = array;
     }
-
+    public static  String TAG = "Scrcpy";
     private void startConnection() {
         videoDecoder = new VideoDecoder();
         videoDecoder.start();
@@ -124,6 +126,7 @@ public class Scrcpy extends Service {
         int attempts = 50;
         while (attempts != 0) {
             try {
+                Log.i(TAG, "startConnection: " + serverAdr + ":7007");
                 socket = new Socket(serverAdr, 7007);
                 dataInputStream = new DataInputStream(socket.getInputStream());
                 dataOutputStream = new DataOutputStream(socket.getOutputStream());

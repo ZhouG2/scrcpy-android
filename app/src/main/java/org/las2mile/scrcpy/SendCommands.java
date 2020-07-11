@@ -28,7 +28,7 @@ public class SendCommands {
     private Thread thread = null;
     private Context context;
     private int status;
-
+    public static String TAG = "SendCommands";
 
     public SendCommands() {
 
@@ -79,26 +79,33 @@ public class SendCommands {
         this.context = context;
         status = 1;
         final StringBuilder command = new StringBuilder();
-        command.append(" CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / org.las2mile.scrcpy.Server ");
+//        localip = "0.0.0.0";
+        command.append(" CLASSPATH=/data/local/tmp/scrcpysrv.jar app_process / org.las2mile.scrcpy.Server ");
         command.append(" /" + localip + " " + Long.toString(size) + " " + Long.toString(bitrate) + ";");
 
-        thread = new Thread(new Runnable() {
+        Thread thd = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
+                    Log.i(TAG, "run: adbWrite:::");
                     adbWrite(ip, fileBase64, command.toString());
                 } catch (IOException e) {
+                    Log.e(TAG, "SendAdbCommands: " + e.getMessage());
                     e.printStackTrace();
                 }
             }
         });
-        thread.start();
+        thd.start();
 
-        while (status == 1) {
-            Log.e("ADB", "Connecting...");
-            for (int i = 0; i < 1000000; i++) {
-            }
+        try {
+
+            thd.join(300 * 1000);
+//            thd.wait(30*1000);
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+
+
         return status;
     }
 
@@ -121,7 +128,17 @@ public class SendCommands {
         }
 
         try {
-            sock = new Socket(ip, 5555);
+            String[] arr = ip.split(":");
+            int port = 5555;
+            if (arr.length > 1) {
+                try {
+                    port = Integer.valueOf(arr[1]);
+                } catch (Exception e) {
+                    port = 5555;
+                }
+            }
+
+            sock = new Socket(arr[0], port);
         } catch (UnknownHostException e) {
             status = 2;
             throw new UnknownHostException(ip + " is no valid ip address");
@@ -138,12 +155,16 @@ public class SendCommands {
 
         if (sock != null) {
             try {
+                Log.i(TAG, "adbWrite: adb.connect");
                 adb = AdbConnection.create(sock, crypto);
                 adb.connect();
             } catch (IllegalStateException e) {
+                Log.e(TAG, "adbWrite: ");
                 e.printStackTrace();
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
+                Log.e(TAG, "adbWrite: ");
+
                 return;
             }
         }
@@ -151,41 +172,33 @@ public class SendCommands {
         if (adb != null) {
 
             try {
+                Log.i(TAG, "adbWrite: adb.open");
                 stream = adb.open("shell:");
             } catch (IOException | InterruptedException e) {
+
                 e.printStackTrace();
                 return;
             }
         }
 
+
+
         if (stream != null) {
+
+
             try {
-                stream.write("" + '\n');
+
+                stream.writeForResult(command + '\n');
+                status = 0;
+                return;
+//                String rlt = stream.writeForResult("rm -f serverBase64" + '\n', 10000);
+//                stream.write();
             } catch (IOException | InterruptedException e) {
                 e.printStackTrace();
                 return;
             }
-        }
-
-
-        String responses = "";
-        boolean done = false;
-        while (!done && stream != null) {
-            try {
-                byte[] responseBytes = stream.read();
-                String response = new String(responseBytes, "US-ASCII");
-                if (response.substring(response.length() - 2).equals("$ ") ||
-                        response.substring(response.length() - 2).equals("# ")) {
-                    done = true;
-                    responses += response;
-                    break;
-                } else {
-                    responses += response;
-                }
-            } catch (InterruptedException | IOException e) {
-                e.printStackTrace();
-            }
-        }
+        } else
+            Log.i(TAG, "adbWrite: stream == null");
 
 
         if (stream != null) {
@@ -193,46 +206,36 @@ public class SendCommands {
             byte[] filePart = new byte[4056];
             int sourceOffset = 0;
             try {
-                stream.write(" cd data/local/tmp " + '\n');
+                stream.write(" cd /data/local/tmp " + '\n');
                 while (sourceOffset < len) {
                     if (len - sourceOffset >= 4056) {
                         System.arraycopy(fileBase64, sourceOffset, filePart, 0, 4056);  //Writing in 4KB pieces. 4096-40  ---> 40 Bytes for actual command text.
                         sourceOffset = sourceOffset + 4056;
-                        String ServerBase64part = new String(filePart, "US-ASCII");
-                        stream.write(" echo " + ServerBase64part + " >> serverBase64" + '\n');
-                        done = false;
-                        while (!done) {
-                            byte[] responseBytes = stream.read();
-                            String response = new String(responseBytes, "US-ASCII");
-                            if (response.endsWith("$ ") || response.endsWith("# ")) {
-                                done = true;
-                            }
-                        }
+
+
+                        String ServerBase64part = new String(filePart, "UTF-8");
+                        Log.i(TAG, "adbWrite: Base64\n" + ServerBase64part);
+                        stream.writeForResult(" echo " + ServerBase64part + " >> serverBase64" + '\n', 10000);
+
                     } else {
                         int rem = len - sourceOffset;
                         byte[] remPart = new byte[rem];
                         System.arraycopy(fileBase64, sourceOffset, remPart, 0, rem);
                         sourceOffset = sourceOffset + rem;
-                        String ServerBase64part = new String(remPart, "US-ASCII");
-                        stream.write(" echo " + ServerBase64part + " >> serverBase64" + '\n');
-                        done = false;
-                        while (!done) {
-                            byte[] responseBytes = stream.read();
-                            String response = new String(responseBytes, "US-ASCII");
-                            if (response.endsWith("$ ") || response.endsWith("# ")) {
-                                done = true;
-                            }
-                        }
+                        String ServerBase64part = new String(remPart, "UTF-8");
+                        stream.writeForResult(" echo " + ServerBase64part + " >> serverBase64" + '\n', 10000);
+
                     }
                 }
-                stream.write(" base64 -d < serverBase64 > scrcpy-server.jar && rm serverBase64" + '\n');
+                stream.write(" base64 -d < serverBase64 > scrcpy-server.jar " + '\n');
                 stream.write(command + '\n');
             } catch (IOException | InterruptedException e) {
+                Log.e("adbWrite: ", "adbWrite failed!!!!! ");
                 e.printStackTrace();
                 return;
             }
-	}
-
+        }
+        Log.i(TAG, "adbWrite: Send Command Succeed");
         status = 0;
 
     }

@@ -1,6 +1,8 @@
 package org.las2mile.scrcpy.adblib;
 
 
+import android.util.Log;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
@@ -279,6 +281,8 @@ public class AdbProtocol {
          */
         public byte[] payload;
 
+        public static String TAG = "AdbMessage";
+
         /**
          * Read and parse an ADB message from the supplied input stream.
          * This message is NOT validated.
@@ -290,18 +294,37 @@ public class AdbProtocol {
         public static AdbMessage parseAdbMessage(InputStream in) throws IOException {
             AdbMessage msg = new AdbMessage();
             ByteBuffer packet = ByteBuffer.allocate(ADB_HEADER_LENGTH).order(ByteOrder.LITTLE_ENDIAN);
+            long t1 = System.currentTimeMillis();
+            while (true){
+                int rb = in.available();
+                if(rb < ADB_HEADER_LENGTH){
+                    if(System.currentTimeMillis() - t1 > 10000){
+                        Log.d(TAG, "parseAdbMessage: timeout");
+                        return  msg;
+                    }
+                    try {
+                        Thread.sleep(100);
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+                else
+                    break;
+            }
 
             /* Read the header first */
             int dataRead = 0;
-            do {
-                int bytesRead = in.read(packet.array(), dataRead, 24 - dataRead);
+            while (dataRead < ADB_HEADER_LENGTH) {
+
+                int readLength = java.lang.Math.min(in.available(), ADB_HEADER_LENGTH - dataRead);
+                int bytesRead = in.read(packet.array(), dataRead, readLength);
 
                 if (bytesRead < 0)
                     throw new IOException("Stream closed");
                 else
                     dataRead += bytesRead;
             }
-            while (dataRead < ADB_HEADER_LENGTH);
+
 
             /* Pull out header fields */
             msg.command = packet.getInt();
@@ -317,7 +340,8 @@ public class AdbProtocol {
 
                 dataRead = 0;
                 do {
-                    int bytesRead = in.read(msg.payload, dataRead, msg.payloadLength - dataRead);
+                    int readLength = java.lang.Math.min(in.available(), msg.payloadLength - dataRead);
+                    int bytesRead = in.read(msg.payload, dataRead, readLength);
 
                     if (bytesRead < 0)
                         throw new IOException("Stream closed");

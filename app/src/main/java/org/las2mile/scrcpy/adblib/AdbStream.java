@@ -1,5 +1,7 @@
 package org.las2mile.scrcpy.adblib;
 
+import android.util.Log;
+
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.Queue;
@@ -17,7 +19,7 @@ public class AdbStream implements Closeable {
      * The AdbConnection object that the stream communicates over
      */
     private AdbConnection adbConn;
-
+    public static  String TAG = "AdbStream";
     /**
      * The local ID of the stream
      */
@@ -123,12 +125,16 @@ public class AdbStream implements Closeable {
      * @throws IOException          If the stream fails while waiting
      */
     public byte[] read() throws InterruptedException, IOException {
+
+        return read(0);
+    }
+    public byte[] read(int timeout) throws InterruptedException, IOException {
         byte[] data = null;
 
         synchronized (readQueue) {
             /* Wait for the connection to close or data to be received */
             while (!isClosed && (data = readQueue.poll()) == null) {
-                readQueue.wait();
+                readQueue.wait(timeout);
             }
 
             if (isClosed) {
@@ -150,6 +156,42 @@ public class AdbStream implements Closeable {
         /* ADB needs null-terminated strings */
         write(payload.getBytes("UTF-8"), false);
         write(new byte[]{0}, true);
+    }
+    public String writeForResult(String payload, int timeout)throws IOException, InterruptedException {
+        write(payload);
+        String rlt = readAll(timeout);
+        Log.i(TAG, "writeForResult: " + payload + "\n" + rlt);
+        return  rlt;
+    }
+    public String writeForResult(String payload)throws IOException, InterruptedException {
+
+        return  writeForResult(payload, 0);
+    }
+
+    public String readAll(int timeout){
+        String responses = "";
+        boolean done = false;
+        while (!done) {
+            try {
+                byte[] responseBytes =  read(timeout);
+                if(responseBytes.length == 0){
+                    break;
+                }
+                String response = new String(responseBytes, "UTF-8").trim();
+
+                if (response.endsWith("$")
+                        ||response.endsWith("#")) {
+                    done = true;
+                    responses += response;
+                    break;
+                } else {
+                    responses += response;
+                }
+            } catch (InterruptedException | IOException e) {
+                e.printStackTrace();
+            }
+        }
+        return  responses;
     }
 
     /**
